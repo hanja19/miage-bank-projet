@@ -1,0 +1,24 @@
+name: CI Pipeline Partie A
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  audit-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y buildah
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.49.1/trivy_0.49.1_Linux-64bit.deb
+          sudo dpkg -i trivy_0.49.1_Linux-64bit.deb
+
+      - name: Run Build Script
+        run: |
+          chmod +x ci-scripts/build.sh
+          ./ci-scripts/build.sh
