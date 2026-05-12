@@ -2,14 +2,14 @@
 
 # Projet MIAGE-Bank - Session 2026
 
-**Étudiant :** RAJAOBELISON Hanja , ALPTEKIN Eylul
+**Étudiantes :** RAJAOBELISON Hanja , ALPTEKIN Eylul
 **Formation :** Master MIAGE M2 ITN
 **Cours :** Cloud & Kubernetes
 
-## 🎯 Objectif du Projet
+## Objectif du Projet
 Ce dépôt contient l'ensemble des travaux réalisés pour la mise en œuvre de l'infrastructure Cloud de la MIAGE-Bank. L'objectif est de conteneuriser les microservices, d'assurer leur sécurité et de les déployer sur un cluster Kubernetes.
 
-## 📑 Travaux Pratiques
+## Travaux Pratiques
 
 | # | Section | Concepts Clés | Lien |
 | :--- | :--- | :--- | :--- |
@@ -22,7 +22,7 @@ Ce dépôt contient l'ensemble des travaux réalisés pour la mise en œuvre de 
 
 ---
 
-## 🛠️ Stack Technique
+## Stack Technique
 * **Build tool** : Buildah (Podman-ready)
 * **Scanner** : Trivy
 * **Audit** : Dive
