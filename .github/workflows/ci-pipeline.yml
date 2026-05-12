@@ -15,8 +15,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y buildah
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.49.1/trivy_0.49.1_Linux-64bit.deb
-          sudo dpkg -i trivy_0.49.1_Linux-64bit.deb
+          # Installation officielle de Trivy
+          wget -qO - https://aquasecurity.github.io/trivy-repo/dabest.gpg | sudo apt-key add -
+          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update
+          sudo apt-get install -y trivy
 
       - name: Run Build Script
         run: |
