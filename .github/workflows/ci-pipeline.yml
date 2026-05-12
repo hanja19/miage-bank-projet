@@ -14,10 +14,10 @@ jobs:
       - name: Install Build Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y buildah
-          # Installation officielle de Trivy
-          wget -qO - https://aquasecurity.github.io/trivy-repo/dabest.gpg | sudo apt-key add -
-          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
+          sudo apt-get install -y buildah wget apt-transport-https gnupg lsb-release
+          # Méthode propre pour Trivy
+          wget -qO - https://aquasecurity.github.io/trivy-repo/dabest.gpg | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
           sudo apt-get update
           sudo apt-get install -y trivy
 
