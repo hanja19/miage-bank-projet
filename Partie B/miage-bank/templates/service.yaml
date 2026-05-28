@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  # On va chercher le type (ClusterIP) dans le values
+  type: {{ .Values.service.type }} 
+  ports:
+    - port: {{ .Values.service.port }}    # Port exposé par le service (8080)
+      targetPort: 8080                    # Port réel de ton container Java
+      protocol: TCP
+      name: http
+  selector:
+    # Très important : doit être le même label que dans le Deployment
+    app: {{ .Release.Name }}

@@ -1,0 +1,32 @@
+# 1. ON FERME TOUT (Le "Default-Deny" exigé)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "miage-bank.fullname" . }}-default-deny
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector: {} # {} signifie "tous les pods du namespace"
+  policyTypes:
+  - Ingress
+---
+# 2. ON OUVRE UNIQUEMENT POUR TRAEFIK
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "miage-bank.fullname" . }}-allow-traefik
+  namespace: {{ .Release.Namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    # On autorise le trafic venant du namespace où est installé Traefik
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+    ports:
+    - protocol: TCP
+      port: 8080

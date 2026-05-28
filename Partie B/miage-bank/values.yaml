@@ -1,0 +1,36 @@
+# Nombre de replicas du Deployment
+replicaCount: 1
+
+image:
+  repository: hanja19/miage-bank
+  tag: "v1"
+  pullPolicy: IfNotPresent
+
+# Configuration de l'application (Données NON-SENSIBLES uniquement!!! )
+env:
+  DB_URL: "jdbc:postgresql://postgresdb:5432/miage_db"
+  APP_PROFILE: "prod"
+ 
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Configuration de l'Ingress (Traefik)
+ingress:
+  enabled: true
+  host: miage-bank.local
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+serviceAccount:
+  # Indique à Helm de créer le ServiceAccount
+  create: true
+  # Laisse vide pour utiliser le nom généré par le helper
+  name: ""

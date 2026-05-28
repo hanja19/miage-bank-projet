@@ -1,0 +1,22 @@
+# Surcharge pour la production - MIAGE-Bank
+replicaCount: 3  # On met 3 instances pour la haute disponibilité !
+
+env:
+  DB_URL: "jdbc:postgresql://prod-db-service:5432/bank_prod"
+  DB_USER: "admin_prod"
+  DB_PASSWORD: "UnePhraseTresLongueEtSecrete123!"
+  APP_PROFILE: "prod"
+
+resources:
+  limits:
+    cpu: "1"        # je met plus de puissance en prod
+    memory: 1Gi     
+  requests:
+    cpu: 500m       
+    memory: 512Mi
+
+serviceAccount:
+  # Indique à Helm de créer le ServiceAccount
+  create: true
+  # Laisse vide pour utiliser le nom généré par le helper
+  name: ""
