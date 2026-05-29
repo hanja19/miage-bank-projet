@@ -1,6 +1,6 @@
 # 02 - Analyse de sécurité (Question A.3)
 
-Audit de sécurité complet de l'image `miage-bank:v1` réalisé avec l'outil **Trivy**.
+Pour l'analyse de sécurité, j'ai choisi de scanner l'image socle miage-bank:v1 car elle contient l'intégralité du code et de l'environnement (Alpine + Tomcat + Spring) qui sert de base à nos micro-services
 
 ## 1. Méthodologie du Scan
 Conformément aux consignes, l'analyse a été paramétrée comme suit :

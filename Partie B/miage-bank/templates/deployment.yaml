@@ -15,9 +15,9 @@ spec:
     metadata:
       labels:
         app: {{ .Release.Name }}
-    spec:
+    
       # --- EXIGENCE : ServiceAccount dédié ---
-      serviceAccountName: miage-bank-sa
+      serviceAccountName: {{ include "miage-bank.serviceAccountName" . }}
       
       containers:
         - name: miage-bank

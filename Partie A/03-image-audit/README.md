@@ -1,31 +1,43 @@
 # 03 - Audit de l'image avec Dive (Question A.4)
 
-Ce module présente l'analyse de l'optimisation des couches de l'image `miage-bank:v1`.
+Ce module présente l'analyse de l'optimisation des couches (layers) pour les images de nos micro-services. 
 
 ## 1. Validation de la "Security Gate"
-L'audit Dive confirme que l'image respecte les critères de performance :
-* **Score d'efficacité** : 99 %
-* **Taille totale** : 260 MB
-* **Espace gaspillé** : 636 kB
+L'outil Dive a été utilisé pour valider l'efficience de nos images avant le déploiement. Les résultats confirment une optimisation maximale.
 
-![Capture d'écran Dive](dive-analysis.png)
+Micro-service Clients (amc-clients)
+
+Score d'efficacité : 99 %
+Taille totale : 261 MB
+Espace gaspillé : ~600 kB
+
+
+![Capture d'écran Dive](client.png)
+
+Micro-service Comptes (amc-comptes)
+
+Score d'efficacité : 99 %
+Taille totale : 239 MB
+Espace gaspillé : ~600 kB
+
+
+![Capture d'écran Dive](compte.png)
 
 ## 2. Analyse détaillée des couches (Layers)
-D'après l'analyse visuelle, l'image est composée de 6 couches principales :
-1. **Base OS (8.4 MB)** : Image Alpine initiale.
-2. **Setup APK (34 MB)** : Installation des outils nécessaires.
-3. **JRE Runtime (140 MB)** : Environnement d'exécution Java 17.
-4. **Scripts & Config (5.3 kB)** : Ajout de l'entrypoint et des certificats.
-5. **Application JAR (77 MB)** : Le microservice MIAGE-Bank.
+Grâce au choix de l'image de base eclipse-temurin:17-jre-alpine, nous avons réussi à diviser par deux le poids moyen d'une image Java standard (souvent > 500 MB).
 
-## 3. Identification des fichiers superflus
-Dive identifie 636 kB d'espace gaspillé. Les fichiers responsables sont :
-- **/etc/ssl/certs/ca-certificates.crt** (436 kB) : Présent en double car modifié/ajouté lors du build.
-- **/lib/apk/db/installed** (121 kB) : Fichier de base de données du gestionnaire de paquets Alpine.
+Structure type des couches identifiée :
 
-## 4. Stratégie d'optimisation (Avant / Après)
-* **Approche Standard** : Utilisation d'une image JDK complète (souvent > 500 MB).
-* **Approche Optimisée (Actuelle)** : Utilisation de `eclipse-temurin:17-jre-alpine`.
-* **Résultat** : Une taille finale de **260 MB**, soit une réduction significative pour accélérer les transferts réseau et le déploiement sur Kubernetes.
+    Base OS (Alpine) : Empreinte minimale (~8 MB).
 
-**Conclusion** : L'image est validée pour la mise en production.
+    JRE Runtime : Environnement Java 17 optimisé pour l'exécution.
+
+    Application JAR : Couche finale contenant uniquement le binaire métier (77 MB pour Clients / 54 MB pour Comptes).
+
+## 3. Gestion des contraintes (WSL / Buildah)
+Comme pour les étapes précédentes, Dive ne pouvait pas se connecter au démon Docker. Solution mise en œuvre: L'audit a été réalisé en pointant directement sur les archives .tar générées par Buildah.
+- Commande Clients : dive docker-archive://clients.tar
+- Commande Comptes : dive docker-archive://comptes.tar
+
+
+**Conclusion** : Les deux images atteignent un score de 99%. Elles sont validées pour un déploiement performant sur le cluster Kubernetes (Minikube), garantissant des temps de pull et de démarrage très rapides.

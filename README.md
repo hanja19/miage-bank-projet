@@ -27,4 +27,3 @@ Ce dépôt contient l'ensemble des travaux réalisés pour la mise en œuvre de 
 * **CI** : GitHub Actions
 
 *Projet réalisé dans un environnement WSL (Ubuntu) avec Buildah et Maven.*
-EOF

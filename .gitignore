@@ -1,3 +1,18 @@
-image.tar
+# Archives des images (très lourd, à ne jamais push)
+*.tar
+
+# Dossiers de rapports générés par les scripts
+build-reports/
+reports/
+
+# Java & Maven
+target/
 *.jar
-build-reports/image.tar
+.mvn/
+*.class
+
+# IDE (Visual Studio Code)
+.vscode/
+
+# Divers
+.DS_Store
