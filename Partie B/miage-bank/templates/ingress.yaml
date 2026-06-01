@@ -1,25 +1,28 @@
-{{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "miage-bank.fullname" . }}
-  namespace: {{ .Release.Namespace }}
   annotations:
-    # On indique à Kubernetes que c'est Traefik qui gère cet Ingress
     kubernetes.io/ingress.class: traefik
 spec:
-  # On définit la classe demandée (Exigence Projet)
   ingressClassName: traefik
   rules:
-    - host: {{ .Values.ingress.host | quote }} # Le host est pris dans ton values.yaml
+    - host: "miage-bank.local"
       http:
         paths:
+          # Le Front-end
           - path: /
             pathType: Prefix
             backend:
               service:
-                # On pointe vers le service miage-bank
-                name: {{ include "miage-bank.fullname" . }}
+                name: {{ $.Release.Name }}-front
                 port:
-                  number: {{ .Values.service.port }}
-{{- end }}
+                  number: 3000
+          # L'API via le Proxy (Gateway)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Release.Name }}-proxy
+                port:
+                  number: 10000

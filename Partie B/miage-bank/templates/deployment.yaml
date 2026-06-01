@@ -1,64 +1,69 @@
+{{- range $key, $service := .Values.microservices }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    app: {{ .Release.Name }}
+  name: {{ $.Release.Name }}-{{ $service.name }}
 spec:
-  # Récupéré depuis values.yaml (ou values-prod.yaml)
-  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: {{ $service.name }}
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}
-    
-      # --- EXIGENCE : ServiceAccount dédié ---
-      serviceAccountName: {{ include "miage-bank.serviceAccountName" . }}
-      
+        app: {{ $service.name }}
+    spec:
       containers:
-        - name: miage-bank
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+        - name: {{ $service.name }}
+          image: "{{ $service.repository }}:{{ $service.tag }}"
+          imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
-          
-          # --- MODIFICATION VAULT (TP 13) ---
-          # On combine le ConfigMap (non-sensible) et le Secret (Vault via ESO)
+            - containerPort: {{ $service.port }}
           env:
+            # Toutes les applis Java cherchent ces deux-là
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configserver:http://{{ $.Release.Name }}-configserver:10003"
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: "http://{{ $.Release.Name }}-annuaire:10001/eureka/"
+            
+            # Condition pour MySQL (Service Clients)
+            {{- if eq $service.dbType "mysql" }}
             - name: SPRING_DATASOURCE_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "miage-bank.fullname" . }}-config
-                  key: DB_URL
+              value: "jdbc:mysql://miage-bank-db:3306/miage_db?createDatabaseIfNotExist=true"
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: miage-bank-db-secret # Nom défini dans target.name de l'ExternalSecret
+                  name: miage-bank-db-secret
                   key: DB_USER
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: miage-bank-db-secret
                   key: DB_PASSWORD
-          # ----------------------------------
+            {{- end }}
 
-          # --- EXIGENCE : Les Sondes (Probes) ---
-          livenessProbe:
+            # Condition pour MongoDB (Service Comptes)
+            {{- if eq $service.dbType "mongodb" }}
+            - name: SPRING_DATA_MONGODB_HOST
+              value: "miage-bank-mongodb"
+            {{- end }}
+
+          # On garde les sondes de santé car c'est obligatoire en MIAGE
+          startupProbe:
             httpGet:
-              path: /actuator/health/liveness
-              port: 8080
-            initialDelaySeconds: 30
+              path: /actuator/health
+              port: {{ $service.port }}
+            failureThreshold: 30
             periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 15
-            periodSeconds: 5
-
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $service.name }}
+spec:
+  selector:
+    app: {{ $service.name }}
+  ports:
+    - port: {{ $service.port }}
+      targetPort: {{ $service.port }}
+{{- end }}

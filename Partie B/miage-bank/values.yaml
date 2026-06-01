@@ -1,36 +1,47 @@
-# Nombre de replicas du Deployment
-replicaCount: 1
+microservices:
+  # L'infrastructure d'abord
+  annuaire:
+    name: annuaire
+    repository: amc_annuaire
+    tag: latest
+    port: 10001
+  configserver:
+    name: configserver
+    repository: amc_configserver
+    tag: latest
+    port: 10003
+  
+  # La porte d'entrée
+  proxy:
+    name: proxy
+    repository: amc_proxy
+    tag: latest
+    port: 10000
 
-image:
-  repository: hanja19/miage-bank
-  tag: "v1"
-  pullPolicy: IfNotPresent
+  # Les services métiers
+  clients:
+    name: clients
+    repository: amc_clients
+    tag: latest
+    port: 8080
+    hasDatabase: true
+    dbType: mysql
+  comptes:
+    name: comptes
+    repository: amc_comptes
+    tag: latest
+    port: 8080
+    hasDatabase: true
+    dbType: mongodb
+  composite:
+    name: composite
+    repository: amc_composite
+    tag: latest
+    port: 8080
 
-# Configuration de l'application (Données NON-SENSIBLES uniquement!!! )
-env:
-  DB_URL: "jdbc:postgresql://postgresdb:5432/miage_db"
-  APP_PROFILE: "prod"
- 
-
-service:
-  type: ClusterIP
-  port: 8080
-
-# Configuration de l'Ingress (Traefik)
-ingress:
-  enabled: true
-  host: miage-bank.local
-
-resources:
-  limits:
-    cpu: 500m
-    memory: 512Mi
-  requests:
-    cpu: 250m
-    memory: 256Mi
-
-serviceAccount:
-  # Indique à Helm de créer le ServiceAccount
-  create: true
-  # Laisse vide pour utiliser le nom généré par le helper
-  name: ""
+  # Le frontend
+  front:
+    name: front
+    repository: amc_front
+    tag: latest
+    port: 80 # Souvent 80 pour Nginx

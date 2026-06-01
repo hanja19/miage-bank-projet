@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  # On utilise le helper pour le nom, comme dans ton Deployment
   name: {{ include "miage-bank.fullname" . }}-config
   labels:
     {{- include "miage-bank.labels" . | nindent 4 }}
 data:
-  # Données non-sensibles uniquement
-  DB_URL: {{ .Values.env.DB_URL | quote }}
-  APP_PROFILE: {{ .Values.env.APP_PROFILE | default "prod" | quote }}
+  # On met des valeurs par défaut pour éviter les erreurs "nil pointer"
+  DB_URL: "jdbc:mysql://miage-bank-db:3306/miage_db"
+  APP_PROFILE: "dev"
   LOG_LEVEL: "INFO"
+  CONFIG_SERVER_URL: "http://miage-bank-configserver:10003"
