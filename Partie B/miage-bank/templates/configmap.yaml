@@ -2,11 +2,29 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "miage-bank.fullname" . }}-config
+  namespace: {{ .Values.namespaceName }}
   labels:
     {{- include "miage-bank.labels" . | nindent 4 }}
 data:
-  # On met des valeurs par défaut pour éviter les erreurs "nil pointer"
-  DB_URL: "jdbc:mysql://miage-bank-db:3306/miage_db"
-  APP_PROFILE: "dev"
-  LOG_LEVEL: "INFO"
-  CONFIG_SERVER_URL: "http://miage-bank-configserver:10003"
+  # ── Découverte de services (Eureka) ──────────────────────
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://annuaire:{{ .Values.services.annuaire.port }}/eureka/"
+  EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+
+  # ── Serveur de configuration Spring Cloud ────────────────
+  SPRING_CLOUD_CONFIG_URI: "http://configserver:{{ .Values.services.configserver.port }}"
+  SPRING_CONFIG_IMPORT: "optional:configserver:http://configserver:{{ .Values.services.configserver.port }}"
+
+  # ── Base MySQL (service clients) ─────────────────────────
+  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:{{ .Values.databases.mysql.port }}/{{ .Values.databases.mysql.database }}?useSSL=false&allowPublicKeyRetrieval=true"
+  SPRING_DATASOURCE_USERNAME: "root"
+
+  # ── Base MongoDB (service comptes) ───────────────────────
+  SPRING_DATA_MONGODB_HOST: "mongodb"
+  SPRING_DATA_MONGODB_PORT: "{{ .Values.databases.mongodb.port }}"
+  SPRING_DATA_MONGODB_DATABASE: "{{ .Values.databases.mongodb.database }}"
+  SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: "{{ .Values.databases.mongodb.authDatabase }}"
+  SPRING_DATA_MONGODB_USERNAME: "root"
+
+  # ── Actuator (endpoints pour les probes K8s) ─────────────
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "always"

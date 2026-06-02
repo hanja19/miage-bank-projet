@@ -1,47 +1,165 @@
-microservices:
-  # L'infrastructure d'abord
+# ============================================================
+# values.yaml — MIAGE-Bank Helm Chart
+# IMPORTANT : ce fichier ne contient AUCUN secret/credential.
+# Les mots de passe DB sont injectés via values-secrets.yaml
+# (gitignore) ou via --set au déploiement.
+# En production : HashiCorp Vault + External Secrets Operator.
+# ============================================================
+
+namespaceName: miage-bank
+
+# Configuration des images (locales dans Minikube)
+image:
+  registry: localhost
+  defaultTag: v1
+  pullPolicy: Never        # images chargées localement — pas de pull
+
+# ServiceAccount dédié (least privilege)
+serviceAccount:
+  name: miage-bank-sa
+
+# Secrets DB — VIDE ici, à fournir via --set ou values-secrets.yaml (gitignore)
+# Ne jamais committer de vraies valeurs dans ce fichier.
+# Exemple : helm install miage-bank . --set secrets.mysqlRootPassword=root
+secrets:
+  mysqlRootPassword: ""
+  mongoRootPassword: ""
+
+# Ingress Traefik
+ingress:
+  enabled: true
+  className: traefik
+  host: miage-bank.local   # ajouter dans /etc/hosts : $(minikube ip) miage-bank.local
+
+# Bases de données (déployées dans le même namespace)
+databases:
+  mysql:
+    enabled: true
+    image: mysql:8.0
+    port: 3306
+    database: banquebd
+  mongodb:
+    enabled: true
+    image: mongo:6.0
+    port: 27017
+    database: banquebd
+    authDatabase: admin
+
+# ============================================================
+# Micro-services MIAGE-Bank
+# Chaque entrée génère un Deployment + Service ClusterIP.
+# ============================================================
+services:
   annuaire:
-    name: annuaire
-    repository: amc_annuaire
-    tag: latest
+    image: miage-bank-annuaire
+    tag: v1
     port: 10001
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+    readinessProbe:
+      httpGet: { path: /actuator/health, port: 10001 }
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      failureThreshold: 5
+    livenessProbe:
+      httpGet: { path: /actuator/health, port: 10001 }
+      initialDelaySeconds: 90
+      periodSeconds: 20
+      failureThreshold: 3
+
   configserver:
-    name: configserver
-    repository: amc_configserver
-    tag: latest
+    image: miage-bank-configserver
+    tag: v1
     port: 10003
-  
-  # La porte d'entrée
-  proxy:
-    name: proxy
-    repository: amc_proxy
-    tag: latest
-    port: 10000
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+    readinessProbe:
+      httpGet: { path: /actuator/health, port: 10003 }
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      failureThreshold: 5
+    livenessProbe:
+      httpGet: { path: /actuator/health, port: 10003 }
+      initialDelaySeconds: 90
+      periodSeconds: 20
+      failureThreshold: 3
 
-  # Les services métiers
   clients:
-    name: clients
-    repository: amc_clients
-    tag: latest
-    port: 8080
-    hasDatabase: true
-    dbType: mysql
-  comptes:
-    name: comptes
-    repository: amc_comptes
-    tag: latest
-    port: 8080
-    hasDatabase: true
-    dbType: mongodb
-  composite:
-    name: composite
-    repository: amc_composite
-    tag: latest
-    port: 8080
+    image: miage-bank-clients
+    tag: v1
+    port: 10011
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+    readinessProbe:
+      httpGet: { path: /actuator/health, port: 10011 }
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      failureThreshold: 5
+    livenessProbe:
+      httpGet: { path: /actuator/health, port: 10011 }
+      initialDelaySeconds: 120
+      periodSeconds: 20
+      failureThreshold: 3
 
-  # Le frontend
-  front:
-    name: front
-    repository: amc_front
-    tag: latest
-    port: 80 # Souvent 80 pour Nginx
+  comptes:
+    image: miage-bank-comptes
+    tag: v1
+    port: 10021
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+    readinessProbe:
+      httpGet: { path: /actuator/health, port: 10021 }
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      failureThreshold: 5
+    livenessProbe:
+      httpGet: { path: /actuator/health, port: 10021 }
+      initialDelaySeconds: 120
+      periodSeconds: 20
+      failureThreshold: 3
+
+  composite:
+    image: miage-bank-composite
+    tag: v1
+    port: 10031
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+    readinessProbe:
+      httpGet: { path: /actuator/health, port: 10031 }
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      failureThreshold: 5
+    livenessProbe:
+      httpGet: { path: /actuator/health, port: 10031 }
+      initialDelaySeconds: 120
+      periodSeconds: 20
+      failureThreshold: 3
+
+  proxy:
+    image: miage-bank-proxy
+    tag: v1
+    port: 10000
+    replicas: 1
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+    readinessProbe:
+      httpGet: { path: /actuator/health, port: 10000 }
+      initialDelaySeconds: 90
+      periodSeconds: 10
+      failureThreshold: 5
+    livenessProbe:
+      httpGet: { path: /actuator/health, port: 10000 }
+      initialDelaySeconds: 120
+      periodSeconds: 20
+      failureThreshold: 3

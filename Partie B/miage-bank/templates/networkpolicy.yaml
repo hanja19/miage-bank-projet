@@ -1,32 +1,50 @@
-# 1. ON FERME TOUT (Le "Default-Deny" exigé)
+# ── 1. Default deny : tout trafic entrant bloqué par défaut ──
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "miage-bank.fullname" . }}-default-deny
-  namespace: {{ .Release.Namespace }}
+  name: default-deny-ingress
+  namespace: {{ .Values.namespaceName }}
+  labels:
+    {{- include "miage-bank.labels" . | nindent 4 }}
 spec:
-  podSelector: {} # {} signifie "tous les pods du namespace"
+  podSelector: {}          # s'applique à tous les pods du namespace
   policyTypes:
-  - Ingress
+    - Ingress
 ---
-# 2. ON OUVRE UNIQUEMENT POUR TRAEFIK
+# ── 2. Autorisation : trafic entrant depuis Traefik ──────────
+# Permet à Traefik (namespace traefik) d'atteindre le proxy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "miage-bank.fullname" . }}-allow-traefik
-  namespace: {{ .Release.Namespace }}
+  name: allow-from-traefik
+  namespace: {{ .Values.namespaceName }}
+  labels:
+    {{- include "miage-bank.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: proxy           # cible : le pod API Gateway
   policyTypes:
-  - Ingress
+    - Ingress
   ingress:
-  - from:
-    # On autorise le trafic venant du namespace où est installé Traefik
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: traefik
-    ports:
-    - protocol: TCP
-      port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+---
+# ── 3. Autorisation : communication intra-namespace ──────────
+# Les micro-services peuvent se parler entre eux.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: {{ .Values.namespaceName }}
+  labels:
+    {{- include "miage-bank.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}  # tout pod du même namespace

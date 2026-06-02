@@ -1,28 +1,24 @@
+{{- if .Values.ingress.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "miage-bank.fullname" . }}
+  name: {{ include "miage-bank.fullname" . }}-ingress
+  namespace: {{ .Values.namespaceName }}
+  labels:
+    {{- include "miage-bank.labels" . | nindent 4 }}
   annotations:
-    kubernetes.io/ingress.class: traefik
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
-  ingressClassName: traefik
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: "miage-bank.local"
+    - host: {{ .Values.ingress.host }}
       http:
         paths:
-          # Le Front-end
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: {{ $.Release.Name }}-front
+                name: proxy
                 port:
-                  number: 3000
-          # L'API via le Proxy (Gateway)
-          - path: /api
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ $.Release.Name }}-proxy
-                port:
-                  number: 10000
+                  number: {{ .Values.services.proxy.port }}
+{{- end }}

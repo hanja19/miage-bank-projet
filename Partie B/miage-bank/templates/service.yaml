@@ -1,19 +1,20 @@
-{{- range $key, $service := .Values.microservices }}
+{{- range $name, $svc := .Values.services }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "miage-bank.fullname" $ }}-{{ $service.name }}
-  namespace: {{ $.Release.Namespace }}
+  name: {{ $name }}
+  namespace: {{ $.Values.namespaceName }}
+  labels:
+    {{- include "miage-bank.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
 spec:
-  publishNotReadyAddresses: true 
-  # On utilise ClusterIP par défaut (standard pour les services internes)
-  type: ClusterIP 
-  ports:
-    - port: {{ $service.port }}
-      targetPort: {{ $service.port }}
-      protocol: TCP
-      name: http
+  type: ClusterIP
   selector:
-    app: {{ $service.name }}
+    app: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+      protocol: TCP
 {{- end }}

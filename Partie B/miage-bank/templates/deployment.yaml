@@ -1,69 +1,54 @@
-{{- range $key, $service := .Values.microservices }}
+{{- range $name, $svc := .Values.services }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $.Release.Name }}-{{ $service.name }}
+  name: {{ $name }}
+  namespace: {{ $.Values.namespaceName }}
+  labels:
+    {{- include "miage-bank.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
 spec:
+  replicas: {{ $svc.replicas | default 1 }}
   selector:
     matchLabels:
-      app: {{ $service.name }}
+      app: {{ $name }}
   template:
     metadata:
       labels:
-        app: {{ $service.name }}
+        app: {{ $name }}
+        {{- include "miage-bank.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
     spec:
+      serviceAccountName: {{ include "miage-bank.serviceAccountName" $ }}
       containers:
-        - name: {{ $service.name }}
-          image: "{{ $service.repository }}:{{ $service.tag }}"
-          imagePullPolicy: IfNotPresent
+        - name: {{ $name }}
+          image: "{{ $.Values.image.registry }}/{{ $svc.image }}:{{ $svc.tag | default $.Values.image.defaultTag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
           ports:
-            - containerPort: {{ $service.port }}
+            - name: http
+              containerPort: {{ $svc.port }}
+              protocol: TCP
+          # Variables non sensibles (ConfigMap)
+          envFrom:
+            - configMapRef:
+                name: {{ include "miage-bank.fullname" $ }}-config
+          # Variables sensibles (Secret — passwords DB)
           env:
-            # Toutes les applis Java cherchent ces deux-là
-            - name: SPRING_CONFIG_IMPORT
-              value: "optional:configserver:http://{{ $.Release.Name }}-configserver:10003"
-            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
-              value: "http://{{ $.Release.Name }}-annuaire:10001/eureka/"
-            
-            # Condition pour MySQL (Service Clients)
-            {{- if eq $service.dbType "mysql" }}
-            - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://miage-bank-db:3306/miage_db?createDatabaseIfNotExist=true"
-            - name: SPRING_DATASOURCE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: miage-bank-db-secret
-                  key: DB_USER
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: miage-bank-db-secret
-                  key: DB_PASSWORD
-            {{- end }}
-
-            # Condition pour MongoDB (Service Comptes)
-            {{- if eq $service.dbType "mongodb" }}
-            - name: SPRING_DATA_MONGODB_HOST
-              value: "miage-bank-mongodb"
-            {{- end }}
-
-          # On garde les sondes de santé car c'est obligatoire en MIAGE
-          startupProbe:
-            httpGet:
-              path: /actuator/health
-              port: {{ $service.port }}
-            failureThreshold: 30
-            periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $.Release.Name }}-{{ $service.name }}
-spec:
-  selector:
-    app: {{ $service.name }}
-  ports:
-    - port: {{ $service.port }}
-      targetPort: {{ $service.port }}
+                  name: {{ include "miage-bank.fullname" $ }}-db-secret
+                  key: SPRING_DATASOURCE_PASSWORD
+            - name: SPRING_DATA_MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "miage-bank.fullname" $ }}-db-secret
+                  key: SPRING_DATA_MONGODB_PASSWORD
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $svc.readinessProbe | nindent 12 }}
+          livenessProbe:
+            {{- toYaml $svc.livenessProbe | nindent 12 }}
 {{- end }}
