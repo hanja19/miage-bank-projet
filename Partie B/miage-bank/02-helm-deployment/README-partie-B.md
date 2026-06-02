@@ -2,15 +2,17 @@
 
 ## Architecture déployée
 
-MIAGE-Bank est déployé sur **Minikube** via un chart Helm complet dans le namespace
-`miage-bank`, exposé via un **Ingress Traefik** et synchronisé en continu par **ArgoCD**.
+MIAGE-Bank est déployé sur **Minikube** via un chart Helm dans le namespace `miage-bank`,
+exposé via un **Ingress Traefik**, sécurisé avec **Vault + ESO** pour les secrets, et
+synchronisé en continu par **ArgoCD**.
 
 | Composant | Rôle | Outil |
 |---|---|---|
 | Chart Helm | Packaging et déploiement | Helm 3.20 |
 | Ingress | Exposition externe | Traefik v3.7.1 |
+| Secrets | Credentials DB depuis Vault | HashiCorp Vault + ESO |
 | GitOps | Synchronisation Git → K8s | ArgoCD v3.4.3 |
-| Secrets | Credentials DB | K8s natif (voir décision) |
+| Autoscaling | HPA CPU/mémoire | K8s autoscaling/v2 |
 
 ---
 
@@ -18,13 +20,27 @@ MIAGE-Bank est déployé sur **Minikube** via un chart Helm complet dans le name
 
 ```bash
 minikube start --memory=4096 --cpus=2
+minikube addons enable metrics-server   # requis pour HPA
+
+# Traefik
 helm repo add traefik https://traefik.github.io/charts && helm repo update
 helm install traefik traefik/traefik --namespace traefik --create-namespace
+
+# ArgoCD
 kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Vault (mode dev — TP uniquement)
+helm install vault hashicorp/vault --namespace vault --create-namespace \
+  --set "server.dev.enabled=true" --set "server.dev.devRootToken=root"
+
+# External Secrets Operator
+helm install external-secrets external-secrets/external-secrets \
+  --namespace external-secrets --create-namespace
 ```
 
-Images MIAGE-Bank chargées dans Minikube (buildées en Partie A) :
+Chargement des images MIAGE-Bank (buildées en Partie A) :
 ```bash
 for svc in annuaire clients comptes composite configserver proxy; do
   buildah push localhost/miage-bank-$svc:v1 docker-archive:/tmp/mb-$svc.tar
@@ -40,263 +56,221 @@ done
 
 ```
 Partie B/miage-bank/
-├── Chart.yaml               — métadonnées (nom, version, appVersion)
-├── values.yaml              — configuration par défaut (sans secret)
-├── values-prod.yaml         — surcharges production (2 réplicas, registry GHCR)
+├── Chart.yaml
+├── values.yaml              — pas de secret en clair
+├── values-prod.yaml         — surcharges production
 └── templates/
-    ├── _helpers.tpl         — helpers de nommage (fullname, labels, SA)
-    ├── namespace.yaml       — namespace miage-bank
-    ├── serviceaccount.yaml  — SA + Role (least privilege) + RoleBinding
-    ├── configmap.yaml       — URLs Spring Cloud (Eureka, ConfigServer, DB)
-    ├── secret.yaml          — credentials DB (voir section secrets)
-    ├── deployment.yaml      — 6 Deployments via range (probes, resources, SA)
+    ├── _helpers.tpl
+    ├── namespace.yaml
+    ├── serviceaccount.yaml  — SA + Role + RoleBinding (least privilege)
+    ├── configmap.yaml       — URLs Spring Cloud
+    ├── secret.yaml          — secret natif (fallback si ESO non disponible)
+    ├── deployment.yaml      — 6 micro-services via range
     ├── service.yaml         — 6 Services ClusterIP via range
-    ├── ingress.yaml         — Ingress Traefik → proxy:10000
-    ├── networkpolicy.yaml   — default-deny + allow-from-traefik + intra-namespace
-    ├── mysql.yaml           — MySQL 8.0 (Deployment + Service)
-    └── mongodb.yaml         — MongoDB 6.0 (Deployment + Service)
+    ├── ingress.yaml         — Traefik → proxy:10000
+    ├── networkpolicy.yaml   — default-deny + allow-traefik + intra-namespace
+    ├── hpa.yaml             — HPA CPU/mémoire par service
+    ├── mysql.yaml
+    └── mongodb.yaml
 ```
-
-Le chart utilise un **pattern `range`** dans `deployment.yaml` et `service.yaml` pour
-générer une ressource par micro-service à partir de la map `values.services`. Cela
-évite la duplication et facilite l'ajout de nouveaux services.
 
 ### Validation pré-déploiement
 
-Les trois validations exigées par le sujet :
-
 ```bash
-# 1. Lint
 helm lint miage-bank/
-# → 1 chart(s) linted, 0 chart(s) failed ✅
+# → 0 chart(s) failed ✅
 
-# 2. Template (aperçu des manifests générés)
 helm template miage-bank miage-bank/ | grep "^kind:" | sort | uniq -c
 # → 1 ConfigMap, 8 Deployments, 1 Ingress, 1 Namespace,
-#   3 NetworkPolicy, 1 Role, 1 RoleBinding, 1 Secret, 8 Services, 1 ServiceAccount
+#   3 NetworkPolicy, 1 Role, 1 RoleBinding, 1 Secret,
+#   8 Services, 1 ServiceAccount, HPA si activés
 
-# 3. Dry-run
 helm install miage-bank miage-bank/ -n miage-bank --dry-run --create-namespace
-# → STATUS: pending-install, aucune erreur
-```
-
-### Déploiement
-
-```bash
-# Créer le namespace, puis installer
-kubectl create namespace miage-bank
-mv miage-bank/templates/namespace.yaml /tmp/
-helm install miage-bank miage-bank/ -n miage-bank --create-namespace
-mv /tmp/namespace.yaml miage-bank/templates/
-# Adopter le namespace dans Helm
-kubectl label namespace miage-bank app.kubernetes.io/managed-by=Helm
-kubectl annotate namespace miage-bank meta.helm.sh/release-name=miage-bank
-kubectl annotate namespace miage-bank meta.helm.sh/release-namespace=miage-bank
-helm upgrade miage-bank miage-bank/ -n miage-bank
-```
-
-Vérification :
-```bash
-helm list -n miage-bank
-# NAME         NAMESPACE   REVISION  STATUS    CHART             APP VERSION
-# miage-bank   miage-bank  2         deployed  miage-bank-1.0.0  v1
+# → STATUS: pending-install ✅
 ```
 
 ---
 
 ## 2. Déploiement Kubernetes
 
-### Ressources créées
+### Ressources déployées
 
 ```bash
-kubectl get all -n miage-bank
+helm list -n miage-bank
+# NAME  NAMESPACE   REVISION  STATUS    CHART             APP VERSION
+# miage-bank  miage-bank  2  deployed  miage-bank-1.0.0  v1
 ```
 
 | Ressource | Nombre | Détail |
 |---|---|---|
 | Deployments | 8 | 6 micro-services + MySQL + MongoDB |
-| Services (ClusterIP) | 8 | 1 par service |
+| Services ClusterIP | 8 | 1 par service |
 | Ingress | 1 | Traefik → proxy:10000 |
-| NetworkPolicy | 3 | default-deny, allow-traefik, allow-intra |
+| NetworkPolicy | 3 | default-deny, allow-traefik, intra-namespace |
+| HPA | configurables | CPU ≤ 70%, mémoire ≤ 80% |
 | ServiceAccount | 1 | miage-bank-sa (least privilege) |
-| Role + RoleBinding | 1 + 1 | lecture seule pods/services/configmaps |
+| Role + RoleBinding | 1+1 | lecture seule pods/services/configmaps |
 
 ### NetworkPolicy
 
-Trois règles assurent la sécurité réseau du namespace :
-
-1. **default-deny-ingress** — bloque tout trafic entrant par défaut
-2. **allow-from-traefik** — autorise Traefik (namespace `traefik`) → pod `proxy`
-3. **allow-intra-namespace** — communication entre pods du namespace
-
-Validation :
 ```bash
 kubectl get networkpolicies -n miage-bank
+# default-deny-ingress    → bloque tout trafic entrant
+# allow-from-traefik      → autorise Traefik → proxy
+# allow-intra-namespace   → communication entre pods
+```
+
+### HPA (Horizontal Pod Autoscaler)
+
+L'autoscaling est activé via `values.yaml`. Il nécessite `metrics-server` :
+```bash
+minikube addons enable metrics-server
+kubectl get hpa -n miage-bank
 ```
 
 ### Ingress Traefik
 
-L'API Gateway (`proxy`, port 10000) est exposée via Traefik :
-
 ```bash
 kubectl get ingress -n miage-bank
-# miage-bank-ingress  traefik  miage-bank.local  ...
+# miage-bank-ingress  traefik  miage-bank.local
 
-# Accès local (ajouter à /etc/hosts)
 echo "$(minikube ip) miage-bank.local" | sudo tee -a /etc/hosts
 ```
 
 ---
 
-## 3. Gestion des secrets
+## 3. Gestion des secrets — Vault + External Secrets Operator
 
-### Décision documentée — K8s natif
+### Architecture
 
-**Approche retenue :** Secret Kubernetes natif (`stringData`) créé par le chart.
+```
+HashiCorp Vault (dev)
+    └── secret/miage-bank/db
+            ├── mysql-password: root
+            └── mongo-password: root
+                    ↓ (ClusterSecretStore)
+         External Secrets Operator
+                    ↓ (ExternalSecret)
+         K8s Secret "miage-bank-db-secret"
+                    ↓
+         Pods (via secretKeyRef)
+```
 
-Les credentials (MySQL `root/root`, MongoDB `root/root`) sont injectés via
-`--set secrets.mysqlRootPassword` au déploiement. Le fichier `values.yaml` ne
-contient **aucune valeur sensible en clair** (champs vides par défaut).
+### Configuration Vault
 
 ```bash
-# Déploiement avec credentials
-helm install miage-bank miage-bank/ -n miage-bank \
-  --set secrets.mysqlRootPassword=root \
-  --set secrets.mongoRootPassword=root
+# Écriture des credentials dans Vault
+kubectl exec -n vault vault-0 -- \
+  env VAULT_TOKEN=root vault kv put secret/miage-bank/db \
+  mysql-password=root \
+  mongo-password=root
+
+kubectl exec -n vault vault-0 -- \
+  env VAULT_TOKEN=root vault kv get secret/miage-bank/db
 ```
 
-**Pourquoi pas Vault + ESO ?**
-L'installation et la configuration complètes de HashiCorp Vault + External Secrets
-Operator (ESO) incluant la configuration des policies Vault, le montage des secrets
-et la synchronisation ESO dépassent le périmètre du délai imparti. Un exemple de
-configuration ESO est fourni dans `01-infrastructure/external-secret.yaml` pour
-illustrer la démarche attendue en production.
+### ClusterSecretStore + ExternalSecret
 
-**Approche production recommandée :**
-```yaml
-# external-secret.yaml (exemple ESO)
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: miage-bank-db-secret
-spec:
-  secretStoreRef:
-    name: vault-backend
-    kind: ClusterSecretStore
-  target:
-    name: miage-bank-db-secret
-  data:
-    - secretKey: SPRING_DATASOURCE_PASSWORD
-      remoteRef:
-        key: miage-bank/db
-        property: mysql-password
+```bash
+# Token Vault pour ESO
+kubectl create secret generic vault-token \
+  --from-literal=token=root -n miage-bank
+
+# ClusterSecretStore (connexion ESO → Vault)
+kubectl apply -f 01-infrastructure/cluster-secret-store.yaml
+
+# ExternalSecret (synchronisation Vault → K8s Secret)
+kubectl apply -f 01-infrastructure/external-secret.yaml
 ```
+
+Vérification :
+```bash
+kubectl get clustersecretstore vault-backend
+# NAME           STATUS  READY
+# vault-backend  Valid   True  
+
+kubectl get externalsecret -n miage-bank
+# NAME                    STATUS        READY
+# miage-bank-db-external  SecretSynced  True  
+```
+
+Les credentials **ne figurent jamais en clair** dans `values.yaml` ni dans le chart.
+Vault est la source unique de vérité pour les secrets.
+
+> **Note :** Vault est déployé en mode **dev** (TP uniquement, données non persistées).
+> En production : mode serveur HA avec stockage persistant (Consul ou Raft).
 
 ---
 
 ## 4. GitOps avec ArgoCD
 
-### Problème du « bootstrap » (l'œuf ou la poule)
+### Bootstrap (l'œuf ou la poule)
 
-ArgoCD ne peut pas se déployer lui-même via GitOps c'est le problème classique de
-bootstrap. ArgoCD a été installé **manuellement** via `kubectl apply` (une seule fois).
-Une fois ArgoCD opérationnel, l'Application `miage-bank` est créée et ArgoCD gère
-ensuite tous les déploiements depuis Git.
-
-### Installation ArgoCD
-
-```bash
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-```
+ArgoCD ne peut pas se déployer via lui-même — c'est le problème de bootstrap classique.
+Il a été installé **une seule fois manuellement** via `kubectl apply`. Ensuite, ArgoCD
+gère tous les déploiements depuis Git, y compris ses propres mises à jour potentielles.
 
 ### Application ArgoCD
 
 ```bash
 kubectl apply -f 01-infrastructure/argocd-app.yaml
-```
-
-```yaml
-# argocd-app.yaml
-spec:
-  source:
-    repoURL: https://github.com/hanja19/miage-bank-projet.git
-    targetRevision: main
-    path: "Partie B/miage-bank"
-  syncPolicy:
-    automated:
-      prune: true      # va supprime les ressources retirées du chart
-      selfHeal: true   # corrige toute dérive manuelle automatiquement
-```
-
-Vérification :
-```bash
 argocd app list
-# NAME               STATUS  HEALTH    SYNCPOLICY  REPO
-# argocd/miage-bank  Synced  Degraded  Auto-Prune  github.com/hanja19/miage-bank-projet
+# NAME               STATUS  HEALTH    SYNCPOLICY
+# argocd/miage-bank  Synced  Degraded  Auto-Prune
 ```
 
-**Note sur le statut Degraded :** la santé est `Degraded` car certains pods Spring Boot
-redémarrent en attendant que leurs dépendances (configserver, bases de données) soient
-pleinement opérationnelles. Les ressources d'infrastructure (NetworkPolicy, RBAC,
-Services, Ingress) sont toutes `Synced / Healthy`. Ce comportement est attendu dans une
-architecture micro-services avec démarrage ordonné.
+Configuration (`argocd-app.yaml`) :
+```yaml
+syncPolicy:
+  automated:
+    prune: true      # supprime les ressources retirées du chart
+    selfHeal: true   # corrige toute dérive automatiquement
+```
+
+**Statut Degraded :** certains pods Spring Boot redémarrent en attendant que leurs
+dépendances soient prêtes (configserver, bases de données). Les ressources
+d'infrastructure (NetworkPolicy, RBAC, Services, Ingress) sont toutes `Healthy`.
 
 ---
 
 ## 5. Démonstration de dérive ArgoCD
 
-L'exercice consiste à modifier manuellement le cluster, observer la détection de dérive
-par ArgoCD (`OutOfSync`), puis observer la réconciliation automatique.
-
-### Procédure
-
 ```bash
 # 1. Désactiver temporairement l'auto-sync
 argocd app set miage-bank --sync-policy none
 
-# 2. Créer la dérive : passer annuaire à 3 réplicas
+# 2. Créer la dérive manuellement
 kubectl scale deployment annuaire --replicas=3 -n miage-bank
+# → ArgoCD détecte : annuaire OutOfSync 
 
-# 3. Constater OutOfSync dans ArgoCD
-argocd app get miage-bank
-# → Deployment annuaire : OutOfSync / Progressing
-```
-
-**Capture — état OutOfSync :**
-> [Insérer capture terminal montrant `annuaire OutOfSync Progressing`]
-
-```bash
-# 4. Déclencher la réconciliation manuelle
+# 3. Réconciliation
 argocd app sync miage-bank
-# → Duration: 1s — deployment.apps/annuaire serverside-applied
+# → annuaire Synced , retour à 1 réplica en 1 seconde
 
-# 5. Vérifier le retour à l'état Git
-kubectl get deployment annuaire -n miage-bank
-# → NAME      READY  UP-TO-DATE  AVAILABLE
-# → annuaire  1/1    1           1           ← retour à 1 réplica ✅
-
-# 6. Réactiver l'auto-sync
+# 4. Réactiver l'auto-sync
 argocd app set miage-bank --sync-policy automated --self-heal --auto-prune
 ```
 
-**Capture — après réconciliation :**
-> [Insérer capture ArgoCD UI montrant Synced + graph topologique]
+**Résultat :** dérive détectée en < 5 secondes, réconciliation en 1 seconde.
+Avec `selfHeal: true`, toute dérive future est corrigée **automatiquement**.
 
-### Résultat observé
+Captures disponibles : `argocd-synced.png` (UI ArgoCD), sorties terminales.
+![Capture d'écran Dive](annuaire-out-syn.png)
 
-ArgoCD a détecté la dérive en moins de **5 secondes** et l'a corrigée en **1 seconde**
-lors du sync manuel. Avec `selfHeal: true` réactivé, toute dérive future est corrigée
-**automatiquement** sans intervention humaine — c'est le principe du GitOps.
+![Capture d'écran Dive](annuaire-syn.png)
 
+
+![Capture d'écran Dive](argo.png)
 ---
 
 ## Livrables
 
-- [x] Chart Helm complet (14 templates, lint + dry-run validés)
-- [x] `values.yaml` sans secret, `values-prod.yaml` documenté
-- [x] Application ArgoCD synchronisée sur `main`
-- [x] Secrets K8s natifs (décision documentée, Vault+ESO référencé)
+- [x] Chart Helm complet (14 templates + HPA)
+- [x] `values.yaml` sans secret, `values-prod.yaml`
+- [x] Secrets gérés via Vault + External Secrets Operator
 - [x] NetworkPolicy (default-deny + allow-traefik + intra-namespace)
+- [x] RBAC (ServiceAccount + Role + RoleBinding least privilege)
+- [x] HPA (autoscaling CPU/mémoire)
 - [x] Ingress Traefik → proxy (miage-bank.local)
+- [x] Application ArgoCD synchronisée sur `main`
 - [x] Démonstration de dérive OutOfSync → Synced

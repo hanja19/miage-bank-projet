@@ -1,29 +1,113 @@
+# RAJAOBELISON Hanja & ALPTEKIN Eylul — MIAGE-Bank (Master MIAGE M2 ITN)
 
+**Cours :** Cloud & Kubernetes — Session 2026
+**TP :** Buildah, Trivy, Dive & Helm / Kubernetes
 
-# Projet MIAGE-Bank - Session 2026
-
-**Étudiantes :** RAJAOBELISON Hanja , ALPTEKIN Eylul
-**Formation :** Master MIAGE M2 ITN
-**Cours :** Cloud & Kubernetes
-
-## Objectif du Projet
-Ce dépôt contient l'ensemble des travaux réalisés pour la mise en œuvre de l'infrastructure Cloud de la MIAGE-Bank. L'objectif est de conteneuriser les microservices, d'assurer leur sécurité et de les déployer sur un cluster Kubernetes.
-
-## Travaux Pratiques
-
-| # | Section | Concepts Clés | Lien Direct |
-| :--- | :--- | :--- | :--- |
-| **A.1/2** | **Analyse & Build** | Architecture Daemonless, Rootless, Buildah | [Voir l'analyse](./Partie%20A/01-image-build/README.md) |
-| **A.3** | **Scan de Sécurité** | Trivy, CVE HIGH/CRITICAL, Remédiation | [Voir le rapport](./Partie%20A/02-security-scan/README.md) |
-| **A.4** | **Audit d'image** | Dive, Optimisation de layers, Efficacité | [Voir l'audit](./Partie%20A/03-audit-dive/README.md) |
-| **A.5** | **Analyse Statique** | Hadolint, Best Practices Containerfile | [Voir le lint](./Partie%20A/04-static-analysis/README.md) |
-| **Bonus** | **Pipeline CI** | GitHub Actions, Automatisation, Check vert | [.github/workflows/ci-pipeline.yml](.github/workflows/ci-pipeline.yml) |
 ---
 
-## Stack Technique
-* **Build tool** : Buildah (Podman-ready)
-* **Scanner** : Trivy
-* **Audit** : Dive
-* **CI** : GitHub Actions
+## Objectif du projet
 
-*Projet réalisé dans un environnement WSL (Ubuntu) avec Buildah et Maven.*
+Ce dépôt regroupe l'ensemble des travaux de conteneurisation, de sécurisation et
+de déploiement de l'application **MIAGE-Bank**, une architecture micro-services
+Spring Boot (Spring Cloud) pour une banque simplifiée.
+
+Le projet est découpé en deux parties évaluées séparément :
+
+- **Partie A** — Chaîne de build OCI : construction des images avec **Buildah**,
+  scan de sécurité avec **Trivy**, audit des layers avec **Dive**, lint du
+  Containerfile avec **Hadolint**, et automatisation via **GitHub Actions**.
+- **Partie B** — Packaging **Helm**, déploiement **Kubernetes** (Minikube), gestion
+  des secrets (Vault + External Secrets Operator), exposition via **Traefik** et
+  GitOps avec **ArgoCD**.
+
+Application source : <https://github.com/hialmar/AMSC> (version **avec sécurité Okta/Auth0**).
+
+---
+
+## Architecture de l'application
+
+MIAGE-Bank est un projet Maven multi-module. Chaque micro-service produit un JAR
+exécutable et est conteneurisé en une image OCI dédiée.
+
+| Micro-service | Rôle | Port | Stockage |
+|---|---|---|---|
+| `amc_annuaire` | Découverte de services (Eureka) | 10001 | — |
+| `amc_configserver` | Serveur de configuration (Spring Cloud Config) | 10003 | — |
+| `amc_clients` | Gestion des profils clients | 10011 | MySQL (`banquebd`) |
+| `amc_comptes` | Gestion des comptes bancaires | 10021 | MongoDB |
+| `amc_composite` | Service composite (clients + comptes) | 10031 | — |
+| `amc_proxy` | API Gateway (point d'entrée + sécurité JWT) | 10000 | — |
+| `amc_front` | Frontend Angular (hors périmètre images Java) | 4200 | — |
+
+Services d'infrastructure : MySQL, MongoDB, Zipkin (traçage), Prometheus (monitoring).
+
+> La version utilisée intègre la sécurité **Okta/Auth0** : tous les appels transitent
+> par la Gateway avec un jeton JWT (OAuth2 Resource Server). Les identifiants de bases
+> et les clés Auth0 sont gérés comme des secrets (voir Partie B).
+
+---
+
+## Structure du dépôt
+
+```
+MIAGE-BANK-PROJET/
+├── README.md                  ← ce fichier
+├── ci-scripts/                ← scripts de la chaîne de build
+│   ├── build-images.sh        ← build Buildah (approche Containerfile)
+│   ├── build-native.sh        ← build Buildah natif (approche layer par layer)
+│   ├── scan-trivy.sh          ← scan de sécurité Trivy
+│   └── audit-dive.sh          ← audit des layers Dive
+├── Partie A/
+│   ├── 01-image-build/        ← Containerfile + analyse Docker/Buildah
+│   ├── 02-security-scan/      ← rapports Trivy (JSON/SARIF) + remédiation
+│   ├── 03-image-audit/        ← audit Dive + optimisations
+│   └── 04-linter-check/       ← lint Hadolint
+├── Partie B/                  ← chart Helm, manifests K8s, ArgoCD
+├── .github/workflows/         ← pipeline CI/CD (bonus)
+└── src/AMSC/                  ← code source des micro-services
+```
+
+---
+
+## Livrables — Partie A
+
+| # | Section | Concepts clés | Lien |
+| :--- | :--- | :--- | :--- |
+| A.1 / A.2 | Analyse & Build | Daemonless, rootless, Buildah, deux approches | [01-image-build](./Partie%20A/01-image-build/README.md) |
+| A.3 | Scan de sécurité | Trivy, CVE HIGH/CRITICAL, remédiation, SARIF | [02-security-scan](./Partie%20A/02-security-scan/README.md) |
+| A.4 | Audit d'image | Dive, efficacité des layers, optimisation | [03-image-audit](./Partie%20A/03-image-audit/README.md) |
+| A.5 / Bonus | Lint & CI | Hadolint, GitHub Actions | [04-linter-check](./Partie%20A/04-linter-check/README.md) |
+
+---
+
+## Exécuter la chaîne de build (Partie A)
+
+Prérequis : Buildah, Trivy, Dive, Hadolint, Maven, JDK 17. Lancer depuis la racine
+du projet.
+
+```bash
+# 1. Construire toutes les images des micro-services (approche Containerfile)
+./ci-scripts/build-images.sh v1
+
+# 2. (Optionnel) construire une image en mode Buildah natif
+./ci-scripts/build-native.sh
+
+# 3. Scanner les images avec Trivy (rapports JSON + SARIF, gate CRITICAL)
+./ci-scripts/scan-trivy.sh v1
+
+# 4. Auditer les layers avec Dive (mode CI, seuils d'efficacité)
+./ci-scripts/audit-dive.sh v1
+```
+
+---
+
+## Stack technique & environnement
+
+- **Build d'images** : Buildah (daemonless, rootless, compatible OCI/Podman)
+- **Scan de sécurité** : Trivy
+- **Audit de layers** : Dive
+- **Lint** : Hadolint
+- **CI/CD** : GitHub Actions
+- **Orchestration** (Partie B) : Kubernetes via Minikube, Helm, ArgoCD, Traefik
+
+Environnement de réalisation : **WSL (Ubuntu)** avec Buildah et Maven.

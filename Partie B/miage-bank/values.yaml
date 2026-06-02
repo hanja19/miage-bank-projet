@@ -163,3 +163,24 @@ services:
       initialDelaySeconds: 120
       periodSeconds: 20
       failureThreshold: 3
+
+  
+
+# ============================================================
+# Autoscaling (HPA) — nécessite : minikube addons enable metrics-server
+# ============================================================
+autoscaling:
+  enabled: true
+  services:
+    proxy:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 3
+      targetCPU: 70
+      targetMemory: 80
+    clients:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPU: 70
+      targetMemory: 80

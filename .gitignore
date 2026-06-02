@@ -16,3 +16,6 @@ target/
 
 # Divers
 .DS_Store
+*.deb
+**/target/final-secrets.yaml
+*.tar
