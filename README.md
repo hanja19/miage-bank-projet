@@ -73,10 +73,10 @@ MIAGE-BANK-PROJET/
 
 | # | Section | Concepts clés | Lien |
 | :--- | :--- | :--- | :--- |
-| A.1 / A.2 | Analyse & Build | Daemonless, rootless, Buildah, deux approches | [01-image-build](./Partie%20A/01-image-build/README.md) |
+| A.1 / A.2 | Analyse & Build | Daemonless, rootless, Buildah, deux approches | [01-image-build](./Partie%20A/01-image-build/README-01-image-build.md) |
 | A.3 | Scan de sécurité | Trivy, CVE HIGH/CRITICAL, remédiation, SARIF | [02-security-scan](./Partie%20A/02-security-scan/README.md) |
-| A.4 | Audit d'image | Dive, efficacité des layers, optimisation | [03-image-audit](./Partie%20A/03-image-audit/README.md) |
-| A.5 / Bonus | Lint & CI | Hadolint, GitHub Actions | [04-linter-check](./Partie%20A/04-linter-check/README.md) |
+| A.4 | Audit d'image | Dive, efficacité des layers, optimisation | [03-image-audit](./Partie%20A/03-image-audit/README-03-image-audit.md) |
+| A.5 / Bonus | Lint & CI | Hadolint, GitHub Actions | [04-linter-check](./Partie%20A/04-linter-check/README-04-linter-check.md) |
 
 ---
 
@@ -109,5 +109,9 @@ du projet.
 - **Lint** : Hadolint
 - **CI/CD** : GitHub Actions
 - **Orchestration** (Partie B) : Kubernetes via Minikube, Helm, ArgoCD, Traefik
+- **Intelligence Artificielle :** Claude (Anthropic)  utilisé pour la génération
+de scripts, templates Helm, configurations K8s et documentation. Conformément
+aux modalités du TP, l'ensemble des réponses générées a été compris, vérifié et
+adapté au contexte MIAGE-Bank avant intégration.
 
 Environnement de réalisation : **WSL (Ubuntu)** avec Buildah et Maven.
