@@ -76,7 +76,7 @@ MIAGE-BANK-PROJET/
 | A.1 / A.2 | Analyse & Build | Daemonless, rootless, Buildah, deux approches | [01-image-build](./Partie%20A/01-image-build/README-01-image-build.md) |
 | A.3 | Scan de sécurité | Trivy, CVE HIGH/CRITICAL, remédiation, SARIF | [02-security-scan](./Partie%20A/02-security-scan/README.md) |
 | A.4 | Audit d'image | Dive, efficacité des layers, optimisation | [03-image-audit](./Partie%20A/03-image-audit/README-03-image-audit.md) |
-| A.5 / Bonus | Lint & CI | Hadolint, GitHub Actions | [04-linter-check](./Partie%20A/04-linter-check/README-04-linter-check.md) |
+| A.5 / Bonus | Lint & CI | Hadolint, GitHub Actions | [04-linter-check](./Partie%20A/04-linter-check/README.md) |
 
 ---
 
@@ -115,3 +115,33 @@ aux modalités du TP, l'ensemble des réponses générées a été compris, vér
 adapté au contexte MIAGE-Bank avant intégration.
 
 Environnement de réalisation : **WSL (Ubuntu)** avec Buildah et Maven.
+
+## Comment verifier et corriger le projet : 
+
+### Badge CI
+[![CI Status](https://github.com/hanja19/miage-bank-projet/actions/workflows/ci-pipeline.yml/badge.svg)](https://github.com/hanja19/miage-bank-projet/actions/workflows/ci-pipeline.yml)
+
+### Vérification rapide (Partie A)
+
+```bash
+# pour validr la chaîne de build complète
+chmod +x ci-scripts/*.sh
+./ci-scripts/build-images.sh v1       #build les 6 images
+./ci-scripts/scan-trivy.sh v1         #scan sécurité → rapports dans Partie A/02-security-scan/reports/
+./ci-scripts/audit-dive.sh v1         #l'audit layers → rapports dans Partie A/03-image-audit/
+hadolint "Partie A/01-image-build/Containerfile"  # lint → 0 erreur
+```
+
+### Vérification rapide (Partie B)
+
+```bash
+cd "Partie B"
+helm lint miage-bank/                          #0 erreurs
+helm template miage-bank miage-bank/           #l'aperçu des manifests
+helm install miage-bank miage-bank/ -n miage-bank --dry-run --create-namespace
+```
+
+### Rapports disponibles
+- Trivy JSON/SARIF : `Partie A/02-security-scan/reports/`
+- Dive CI : `Partie A/03-image-audit/`
+- CI artifacts : onglet Actions → dernier run → `build-reports`
